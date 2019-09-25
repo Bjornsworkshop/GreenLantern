@@ -243,9 +243,3 @@ strip.setPixelColor(i, c);                          // call strip.setPixelColor 
   }
   strip.show();                                     //push updated information to the LED strip
 }     
-     
-     
-     
-     
-     
-     
