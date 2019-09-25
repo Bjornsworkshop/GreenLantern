@@ -1,0 +1,251 @@
+//This program is designed to create an LED strip of defined lenth that follows multiple separate states.
+//A momentary switch wired to a digital I/O with an internal pullup resistor cycles between states
+//Current set up will give the following modes:
+//Default: All LEDs off
+//Button Press 1: All LEDs Breathe White
+//Button Press 2: All LEDs Breathe Green
+//Button Press 3: All LEDs Breathe Yellow
+//Button Press 4: All LEDs Solid White
+//Button Press 5: All LEDs Solid Green
+//Button Press 6: All LEDs Solid Yellow
+//Additional button presses will re-start cycle from default
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////Libraries And Inclusions///////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////
+
+//This section calls are the pre-built reference libraries that establish commonly used naming conventions for variables & commands
+
+
+
+#include <cmath>            // This #include statement allows the program access to the sin() function
+
+#include <neopixel.h>       // This #include statement was automatically added by the Particle IDE.
+
+
+
+
+
+/////////////////////////////////////////////////////////////////////////
+///////////////////////////////Definitions///////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+//This section is where we define certain things that will be regularly referenced by our #included libraries throughout the program
+
+
+
+#define BUTTON_PIN D1       //Select a Digital I/O pin attached to a pull-up resistor (built in or added separately). 
+                            //This causes the program to defuault to reading a "HIGH" value, switching to "LOW" when the button is pressed, resulting in a change of state
+
+#define PIXEL_TYPE WS2812   //Select which type of LEDs we are using. 
+                            //This automatically defines many background variables thanks to the help of the <neopixel.h> library we #included earlier
+
+#define PIXEL_PIN D6        //Select which pin you are connecting to the DATA pin on your LEDs
+                            //This tells the program where to output our commands
+
+#define PIXEL_COUNT 36      //Select total number of LEDs
+                            //This tells the program how many LEDs we have wired to our output data pin defined earlier
+
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////General Initializations & Associations///////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//This section sets the initial state of various values or variables that are not associated with a library
+
+
+
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(PIXEL_COUNT, PIXEL_PIN, PIXEL_TYPE);    //This statement arranges our #defined LED strip information in a way that the <neopixel.h> library we #included earlier can reference
+
+bool oldState = HIGH;         //Initial value for "oldState" is HIGH. This starts our button pin reading a HIGH value (5v in this case) which is used by the pull-up resistor to detect button presses when grounded
+
+int showType = 0;             //Initial value for showType is set to 0. Each button press will add 1 to this value, cycling through the states we define later.
+
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////MODE SPECIFIC INITIALIZATIONS///////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+
+
+//////////////////BREATH mode variables/////////////////
+
+unsigned long startTime = 0;                    //Initial value for our timer is 0 and uses an unsigned Long value which can hold incredibly large numbers (longer than our timer count should ever need to worry about)
+
+int colorR = 0, colorG = 0, colorB = 0;         //Initial value for our (R,G,B) pixels is (0,0,0) AKA Off
+
+int breathTime = 6000;                          //This statement sets the duration of each "breath" of our lights in miliseconds. 6000 miliseconds = 6 seconds. Adjust up or down for longer or shorter interval as needed.
+
+float breathTimeFloat = breathTime;             //floating point variables allow for use of real numbers including decimals rather than just whole numbers. 
+                                                //This will be important in being able to handle our Sine wave equation which determines BREATHING LED brightness later on.
+
+float pi = 3.14;                                //Storing the variable "pi" as 3.14 for use in our Sine wave equation which determines BREATHING LED brightness later on.
+
+
+
+
+///////////////////////////////INITIALIZE BREATH MODE VALUES & START TIMER///////////////////////////////
+
+void startBreath(int r, int g, int b){          //when startBreath is called (lines 216, 218, 220, or 222), set values (r, g, b) to integer values defined by whichever showType value is currently selected in switch(i) on line 215
+    colorR = r;                                 //the Sin wave equation used later may return real number values
+    colorG = g;                                 //this ensures that only integers are used here.
+    colorB = b;
+    startTime = millis();                       //Starts the timer used to calculate breathing LED brightness using a
+}                                               //sin wave equation later in the program
+
+
+
+///////////////////////////////Initialize Solid mode Values///////////////////////////////
+
+void startSolid(int r, int g, int b){          //when startSolid is called (lines 224, 226, or 228), set values (r, g, b) to integer values defined by whichever showType value is currently selected in switch(i) on line 215
+    colorR = r;                                //No sine wave equation is used for this mode, so no timer is needed
+    colorG = g;
+    colorB = b;
+}
+
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////  END DEFINITIONS, INITIALIZATIONS, AND ASSOCIATIONS  ///////////////////////////////////////////////
+///////////////////////////////////////////////////////////// BEGIN EXECUTABLE PROGRAM ///////////////////////////////////////////////////////////// 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+void setup() {                                  //Setup runs one time once powered on, then moves to the loop
+     pinMode(BUTTON_PIN, INPUT_PULLUP);         //Set the pin associated with our button as an input with a pull-up resistor attached
+     strip.begin();                             //command pulled from the <neopixel.h> Library to start our LED strip
+     strip.show();                              //command pulled from the <neopixel.h> Library to initializes all pixels to OFF
+}                                               //End setup(), move to loop() on line 143
+
+
+void loop() {                                   //After the Setup runs once, the Loop part of our code runs repeatedly forever. This is "where the magic happens"
+bool newState = digitalRead(BUTTON_PIN);        //Read input from BUTTON_PIN 
+
+for (int i = 0; i < PIXEL_COUNT; i++) {         //This statement applies pixel color to all pixels whose value is from 0 to PIXEL_COUNT
+    strip.setPixelColor(i, 0);                  //call setPixelColor() function found on line 238 using Pixel color determined by current state selcted in switch(i) found on line 215 
+}
+
+
+if (newState == LOW && oldState == HIGH) {      //Check to see if Button went from Not pressed to pressed
+    delay(20);                                  //20 millisecond delay between reads to debounce & reduce chance of false readings 
+newState = digitalRead(BUTTON_PIN);             //Re-check to ensure button press is true press and not switch bounce
+if (newState == LOW) {                          //If confirmed button press after debounce, increase the state counter of our show-type by 1
+    showType++;                                     
+if (showType > 6)                               //Set number of states with first state being 0. 6 here represents 7 total state options
+    showType=0;                                 //If state count is greater than number of state options, reset to 0 causing a repeating cycle of options
+startShow(showType);                            //Calls the startShow() function on line 214 using the values defined by whichever showType value is currently selected in switch(i) on line 215
+}
+}
+
+
+oldState = newState;                            //Overwrites the oldState with the newState value so that selected state values persist without resetting each loop
+
+
+if (showType > 3)                               //Check state value. If state value "showType" > 3, 
+updateSolid();                                  //call the updateSolid() function found in line 197. If not, go to line 169.
+
+if (showType < 4)                               //Check state value. If state value "showType" < 4,
+updateBreath();                                 //call the updateBreath() function found in line 178
+
+
+}
+     
+     
+     
+     
+     
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////FUNCTIONS TO BE CALLED BASED ON CURRENT STATE SELECTED BY BUTTON PRESS/////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+     
+     
+///////////////////////////////  updateBreath function  ///////////////////////////////
+
+void updateBreath(){                            //Calling function updateBreath() on line 162 takes you here.
+  const float pi = 3.14;                        //defining pi as a floating variable allowing for real numbers including decimals rather than just whole numbers
+  float frac;                                   //ratio of color to use, based on time
+  int r, g, b;                                  //set values for r, g, and b as integers removing any fractions/decimals
+
+   
+  frac = (sin((((millis() - startTime) % breathTime)/breathTimeFloat - 0.25f) * 2.0f * pi) + 1.0f)/2.0f;            //Calculate brightness multiplier based on Sin wave to oscilate between 0 and 1 to achieve variable brightness over time
+                                                
+ 
+  r = colorR * frac;                            //Multiply R value by Sin wave equation fraction to achieve variable brightness over time
+  g = colorG * frac;                            //Multiply G value by Sin wave equation fraction to achieve variable brightness over time
+  b = colorB * frac;                            //Multiply B value by Sin wave equation fraction to achieve variable brightness over time
+
+  setPixelColor(strip.Color(r, g, b), 0);       //Calls setPixelColor() function on line 238 to apply the RGB values resulting from Color * Frac to all pixels
+}
+
+
+///////////////////////////////  updateSolid function  ///////////////////////////////
+
+void updateSolid(){                             //calling function updateSolid() on line 159 takes you here.
+  int r, g, b;
+  r = colorR;
+  g = colorG;
+  b = colorB;
+  setPixelColor(strip.Color(r, g, b), 0);       //Calls setPixelColor() function on line 238 to apply the RGB values defined in the currently active state's definition to all LEDs.  Solid color no breathing
+}
+  
+     
+     
+     
+     
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////DEFINE STATES, SET RGB VALUES, CALL MODE////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+     
+             
+void startShow(int i) {                 //Calling function startShow takes you here.   
+switch(i){                              //Creates a switch with multiple states. Each state applies RGB values and calls either the startBreath() or startSolid() functions. Add or remove cases for more options, but remember to also update your state counter
+case 0: startBreath(0,0,0);             // DEFAULT OFF
+    break;
+case 1:  startBreath(255,255,255);      // BREATHING - WHITE   Applies RGB values listed to the startBreath() function on line 106
+  break;
+case 2:  startBreath(0,155,0);          // BREATHING - GREEN   Applies RGB values listed to the startBreath() function on line 106
+  break;
+case 3:  startBreath(155,155,0);        // BREATHING - YELLOW  Applies RGB values listed to the startBreath() function on line 106
+  break;
+case 4: startSolid(255,255,255);        // SOLID - WHITE       Applies RGB values listed to the startSolid()  function on line 117
+  break;
+case 5:  startSolid(0,255,0);           // SOLID - GREEN       Applies RGB values listed to the startSolid()  function on line 117
+  break;
+case 6:  startSolid(155,155,0);         // Solid - YELLOW      Applies RGB values listed to the startSolid()  function on line 117
+  break;
+ }
+}
+
+
+
+////////////////////////////////////////////////SETPIXELCOLOR FUNCTION////////////////////////////////////////////////
+
+
+void setPixelColor(uint32_t c, uint8_t wait) {      // This function is what actually updates the pixel color information
+for(uint16_t i=0; i<strip.numPixels(); i++) {       // i = 0 means that our updated information starts with the first pixel then continues to all others.
+strip.setPixelColor(i, c);                          // call strip.setPixelColor using RGB values provided by current selected state found in switch(i) using 
+
+//delay(wait);  // ************ removing eliminated the chase effect
+  }
+  strip.show();                                     //push updated information to the LED strip
+}     
+     
+     
+     
+     
+     
+     
